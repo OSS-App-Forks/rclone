@@ -63,7 +63,7 @@ const (
 var (
 	// Description of how to auth for this app
 	storageConfig = &oauthutil.Config{
-		Scopes:       []string{storage.DevstorageReadWriteScope},
+		Scopes:       []string{storage.DevstorageFullControlScope},
 		AuthURL:      google.Endpoint.AuthURL,
 		TokenURL:     google.Endpoint.TokenURL,
 		ClientID:     rcloneClientID,
@@ -1295,24 +1295,25 @@ func (o *Object) SetModTime(ctx context.Context, modTime time.Time) (err error) 
 	object.Metadata[metaMtimeGsutil] = strconv.FormatInt(modTime.Unix(), 10)
 	// Copy the object to itself to update the metadata
 	// Using PATCH requires too many permissions
+	// Use the Patch method to update the metadata without rewriting the object
 	bucket, bucketPath := o.split()
 	var newObject *storage.Object
 	err = o.fs.pacer.Call(func() (bool, error) {
-		copyObject := o.fs.svc.Objects.Copy(bucket, bucketPath, bucket, bucketPath, object)
+		patch := o.fs.svc.Objects.Patch(bucket, bucketPath, object)
 		if !o.fs.opt.BucketPolicyOnly {
-			copyObject.DestinationPredefinedAcl(o.fs.opt.ObjectACL)
+			patch.PredefinedAcl(o.fs.opt.ObjectACL)
 		}
-		copyObject = copyObject.Context(ctx)
+		patch = patch.Context(ctx)
 		if o.fs.opt.UserProject != "" {
-			copyObject = copyObject.UserProject(o.fs.opt.UserProject)
+			patch = patch.UserProject(o.fs.opt.UserProject)
 		}
-		newObject, err = copyObject.Do()
+		newObject, err = patch.Do()
 		return shouldRetry(ctx, err)
 	})
 	if err != nil {
 		return err
 	}
-	o.setMetaData(newObject)
+	o.setMetaData(newObject) // Update object metadata after successful patch
 	return nil
 }
 
