@@ -56,7 +56,6 @@ const (
 	timeFormat                  = time.RFC3339Nano
 	metaMtime                   = "mtime"                    // key to store mtime in metadata
 	metaMtimeGsutil             = "goog-reserved-file-mtime" // key used by GSUtil to store mtime in metadata
-	metaMtimeRclone             = "mtime-rclone"               // key to store rclone's mtime in metadata
 	listChunks                  = 1000                       // chunk size to read directory listings
 	minSleep                    = 10 * time.Millisecond
 )
@@ -1192,17 +1191,6 @@ func (o *Object) setMetaData(info *storage.Object) {
 		fs.Debugf(o, "Failed to read mtime from metadata: %s", err)
 	}
 
-	// Use new custom metadata field as 1st preference
-	mtimeRcloneString, ok := info.Metadata[metaMtimeRclone]
-	if ok {
-		modTime, err := time.Parse(timeFormat, mtimeRcloneString)
-		if err == nil {
-			o.modTime = modTime
-			return
-		}
-		fs.Debugf(o, "Failed to read mtime-rclone from metadata: %s", err)
-	}
-
 	// Fallback to GSUtil mtime
 	mtimeGsutilString, ok := info.Metadata[metaMtimeGsutil]
 	if ok {
@@ -1287,8 +1275,7 @@ func (o *Object) ModTime(ctx context.Context) time.Time {
 // Returns metadata for an object
 func metadataFromModTime(modTime time.Time) map[string]string {
 	metadata := make(map[string]string, 1)
-	metadata[metaMtimeRclone] = modTime.Format(timeFormat)
-    metadata[metaMtime] = modTime.Format(timeFormat)
+	metadata[metaMtime] = modTime.Format(timeFormat)
 	metadata[metaMtimeGsutil] = strconv.FormatInt(modTime.Unix(), 10)
 	return metadata
 }
@@ -1304,7 +1291,6 @@ func (o *Object) SetModTime(ctx context.Context, modTime time.Time) (err error) 
 	if object.Metadata == nil {
 		object.Metadata = make(map[string]string, 1)
 	}
-	object.Metadata[metaMtimeRclone] = modTime.Format(timeFormat)
 	object.Metadata[metaMtime] = modTime.Format(timeFormat)
 	object.Metadata[metaMtimeGsutil] = strconv.FormatInt(modTime.Unix(), 10)
 	// Copy the object to itself to update the metadata
